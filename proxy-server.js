@@ -74,20 +74,7 @@ function parseArgs() {
       if (isNaN(port)) port = DEFAULT_PORT;
       i++;
     } else if (args[i] === 'proxy') {
-      // 'proxy' subcommand — already handled by bin name
       continue;
-    } else if (args[i] === '--version' || args[i] === '-v') {
-      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-      console.log(pkg.version);
-      process.exit(0);
-    } else if (args[i] === '--help' || args[i] === '-h') {
-      console.log('code-to-figma proxy server');
-      console.log('');
-      console.log('  npx code-to-figma proxy         Start proxy (default port 3001)');
-      console.log('  npx code-to-figma proxy -p 8080  Custom port');
-      console.log('  npx code-to-figma proxy --version  Show version');
-      console.log('  npx code-to-figma proxy --help     Show this help');
-      process.exit(0);
     }
   }
   return { port };
