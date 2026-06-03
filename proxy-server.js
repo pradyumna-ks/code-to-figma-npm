@@ -53,6 +53,51 @@ const path = require('path');
 const DEFAULT_PORT = 3001;
 const TIMEOUT_MS = 30_000;
 
+// ── Asset cache (LRU) and concurrency limiter ───────────────
+// Prevents OOM on image-heavy pages by limiting concurrent fetches
+// and caching recently-used assets.
+const MAX_CACHE_SIZE = 200;
+const MAX_CONCURRENT_FETCHES = 10;
+const assetCache = new Map();        // url → { body, headers, storedAt }
+let activeFetches = 0;
+const fetchQueue = [];               // [{ url, resolve, reject }]
+
+function processQueue() {
+  while (fetchQueue.length > 0 && activeFetches < MAX_CONCURRENT_FETCHES) {
+    const { url, resolve, reject } = fetchQueue.shift();
+    activeFetches++;
+    doFetchAsset(url).then(resolve, reject).finally(() => {
+      activeFetches--;
+      processQueue();
+    });
+  }
+}
+
+function enqueueAssetFetch(url) {
+  return new Promise((resolve, reject) => {
+    fetchQueue.push({ url, resolve, reject });
+    processQueue();
+  });
+}
+
+async function doFetchAsset(url) {
+  // Check cache first
+  const cached = assetCache.get(url);
+  if (cached && Date.now() - cached.storedAt < 60_000) {
+    return { body: cached.body, headers: cached.headers };
+  }
+  const result = await fetchUrl(url);
+  const body = result.body;
+  const headers = result.headers;
+  // Store in cache (evict oldest if full)
+  if (assetCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = assetCache.keys().next().value;
+    assetCache.delete(oldestKey);
+  }
+  assetCache.set(url, { body, headers, storedAt: Date.now() });
+  return { body, headers };
+}
+
 // ── Read the capture shim from the same package ─────────────
 const SHIM_PATH = path.join(__dirname, 'figma-capture.js');
 let SHIM_SOURCE = '';
@@ -301,17 +346,20 @@ function startServer(port) {
         return;
       }
       try {
-        const result = await fetchUrl(assetUrl);
+        const result = await enqueueAssetFetch(assetUrl);
         const responseHeaders = {
           'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'public, max-age=31536000',
           'Content-Type': result.headers['content-type'] || 'application/octet-stream',
         };
-        res.writeHead(result.status, responseHeaders);
+        res.writeHead(200, responseHeaders);
         res.end(result.body);
       } catch (err) {
-        res.writeHead(502, { 'Access-Control-Allow-Origin': '*' });
-        res.end(String(err));
+        console.error(`[code-to-figma] asset fetch failed: ${assetUrl} — ${err.message}`);
+        // Return a transparent 1x1 GIF instead of crashing
+        const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' });
+        res.end(transparentGif);
       }
       return;
     }
