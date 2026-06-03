@@ -1,15 +1,19 @@
 {
-  "name": "localhost-to-figma",
-  "version": "0.3.0",
-  "description": "Capture shim for the Localhost to Figma Figma plugin — lets the plugin read your running app's DOM and paste it as editable Figma layers.",
+  "name": "code-to-figma",
+  "version": "0.3.13",
+  "description": "Capture shim for the Code to Figma Figma plugin — lets the plugin read your running app's DOM and paste it as editable Figma layers.",
   "main": "figma-capture.js",
   "module": "figma-capture.js",
   "sideEffects": true,
+  "bin": {
+    "web-to-figma": "./proxy-server.js"
+  },
   "scripts": {
     "postinstall": "node postinstall.js"
   },
   "files": [
     "figma-capture.js",
+    "proxy-server.js",
     "postinstall.js",
     "README.md",
     "LICENSE"
@@ -17,7 +21,7 @@
   "keywords": [
     "figma",
     "plugin",
-    "localhost",
+    "code-to-figma",
     "design",
     "capture",
     "dom",
@@ -27,10 +31,10 @@
   "author": "Pradyumna KS",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pradyumna-ks/localhost-to-figma-npm.git"
+    "url": "git+https://github.com/pradyumna-ks/code-to-figma-npm.git"
   },
   "bugs": {
-    "url": "https://github.com/pradyumna-ks/localhost-to-figma/issues"
+    "url": "https://github.com/pradyumna-ks/code-to-figma/issues"
   },
-  "homepage": "https://github.com/pradyumna-ks/localhost-to-figma#readme"
+  "homepage": "https://github.com/pradyumna-ks/code-to-figma#readme"
 }
