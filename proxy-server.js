@@ -126,8 +126,11 @@ function parseArgs() {
 }
 
 // ── Fetch a URL with redirect following (returns buffer for binary) ──
-function fetchUrl(targetUrl, cookies) {
+// Node.js http/https does NOT follow redirects automatically — we must
+// do it manually. Also handles protocol switches (http→https).
+function fetchUrl(targetUrl, cookies, redirectCount = 0) {
   return new Promise((resolve, reject) => {
+    if (redirectCount > 10) return reject(new Error('Too many redirects: ' + targetUrl));
     const parsed = new URL(targetUrl);
     const mod = parsed.protocol === 'https:' ? https : http;
     const requestHeaders = {
@@ -145,16 +148,26 @@ function fetchUrl(targetUrl, cookies) {
       method: 'GET',
       headers: requestHeaders,
       timeout: TIMEOUT_MS,
-      maxRedirects: 5,
+      rejectUnauthorized: false, // Allow self-signed certs on some sites
     };
 
     const req = mod.request(options, (res) => {
+      // Handle redirects manually — Node.js http/https does NOT follow them
+      const status = res.statusCode;
+      if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) {
+        const location = res.headers.location;
+        if (!location) return reject(new Error('Redirect without Location header'));
+        // Resolve relative redirect URLs
+        const redirectUrl = new URL(location, targetUrl).href;
+        return resolve(fetchUrl(redirectUrl, cookies, redirectCount + 1));
+      }
+
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const body = Buffer.concat(chunks);
         resolve({
-          status: res.statusCode,
+          status,
           headers: res.headers,
           body,   // Buffer (binary-safe, not string)
         });
@@ -314,18 +327,28 @@ function processHtml(html, originalUrl, proxyBase) {
 }
 
 // ── Strip iframe-blocking headers ────────────────────────────
-function stripBlockingHeaders(headers) {
+// For HTML pages, we remove CSP entirely (not just frame-ancestors)
+// because the page's CSP likely doesn't whitelist our injected shim
+// as an inline script. Also strips frame-breaker headers.
+function stripBlockingHeaders(headers, isHtml) {
   const result = { ...headers };
   delete result['x-frame-options'];
   delete result['x-xss-protection'];
-  // Remove frame-ancestors from CSP
-  if (result['content-security-policy']) {
-    result['content-security-policy'] = result['content-security-policy']
-      .replace(/;?\s*frame-ancestors\s[^;]+/gi, '');
-  }
-  if (result['content-security-policy-report-only']) {
-    result['content-security-policy-report-only'] = result['content-security-policy-report-only']
-      .replace(/;?\s*frame-ancestors\s[^;]+/gi, '');
+  // For HTML pages, strip CSP entirely — we inject scripts so CSP
+  // integrity is already broken. For assets (images/fonts), keep CSP.
+  if (isHtml) {
+    delete result['content-security-policy'];
+    delete result['content-security-policy-report-only'];
+  } else {
+    // For non-HTML, only remove frame-ancestors
+    if (result['content-security-policy']) {
+      result['content-security-policy'] = result['content-security-policy']
+        .replace(/;?\s*frame-ancestors\s[^;]+/gi, '');
+    }
+    if (result['content-security-policy-report-only']) {
+      result['content-security-policy-report-only'] = result['content-security-policy-report-only']
+        .replace(/;?\s*frame-ancestors\s[^;]+/gi, '');
+    }
   }
   // Set CORS so the plugin can access the iframe content
   result['access-control-allow-origin'] = '*';
@@ -429,8 +452,11 @@ function startServer(port) {
       // Inject shim, rewrite images, fix headers
       const html = result.body.toString('utf8');
       const proxyBase = `http://localhost:${server.address().port}`;
+      const htmlLen = html.length;
       const modified = processHtml(html, targetUrl, proxyBase);
-      const responseHeaders = stripBlockingHeaders(result.headers);
+      console.log(`[code-to-figma] processHtml: ${htmlLen} → ${modified.length} bytes (+${modified.length - htmlLen})`);
+      console.log(`[code-to-figma] shim in output: ${modified.includes('DEV_TO_DESIGN/CAPTURE_DOM')}`);
+      const responseHeaders = stripBlockingHeaders(result.headers, true);
       responseHeaders['Content-Type'] = 'text/html; charset=utf-8';
 
       res.writeHead(result.status, responseHeaders);
