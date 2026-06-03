@@ -18,10 +18,6 @@ jobs:
           node-version: 18
           registry-url: https://registry.npmjs.org/
 
-      # setup-node with registry-url creates ~/.npmrc with _authToken=$NODE_AUTH_TOKEN
-      # where NODE_AUTH_TOKEN defaults to the GitHub token. This blocks OIDC auth.
-      # We create a project-level .npmrc (takes precedence) with only the registry
-      # URL — no auth token — so npm uses OIDC instead.
-      - run: echo "registry=https://registry.npmjs.org/" > .npmrc
-
       - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -7,8 +7,8 @@
  * headers that block iframe embedding (X-Frame-Options, CSP frame-ancestors),
  * injects the capture shim, and returns the modified HTML.
  *
- * Usage:  npx web-to-figma proxy
- *         npx web-to-figma proxy --port 8080
+ * Usage:  npx code-to-figma proxy
+ *         npx code-to-figma proxy --port 8080
  *
  * The plugin auto-detects this proxy at http://localhost:3001. When it's
  * running, the iframe loads via src (not srcdoc), so the origin is localhost
@@ -30,8 +30,8 @@ let SHIM_SOURCE = '';
 try {
   SHIM_SOURCE = fs.readFileSync(SHIM_PATH, 'utf8');
 } catch (err) {
-  console.error('[web-to-figma] ERROR: Could not read figma-capture.js');
-  console.error('[web-to-figma] Make sure it exists next to proxy-server.js');
+  console.error('[code-to-figma] ERROR: Could not read figma-capture.js');
+  console.error('[code-to-figma] Make sure it exists next to proxy-server.js');
   process.exit(1);
 }
 
@@ -178,7 +178,7 @@ function startServer(port) {
     // Health check / ping endpoint
     if (req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      res.end(JSON.stringify({ status: 'ok', service: 'web-to-figma-proxy' }));
+      res.end(JSON.stringify({ status: 'ok', service: 'code-to-figma-proxy' }));
       return;
     }
 
@@ -203,7 +203,7 @@ function startServer(port) {
       return;
     }
 
-    console.log(`[web-to-figma] Proxying: ${targetUrl}`);
+    console.log(`[code-to-figma] Proxying: ${targetUrl}`);
 
     // Forward cookies from the iframe browser to the target
     // The browser stores cookies for localhost:3001 (our proxy domain)
@@ -231,9 +231,9 @@ function startServer(port) {
       res.writeHead(result.status, responseHeaders);
       res.end(modified);
 
-      console.log(`[web-to-figma] ✓ ${targetUrl} — ${result.status}${result.headers['set-cookie'] ? ' (cookies set)' : ''}`);
+      console.log(`[code-to-figma] ✓ ${targetUrl} — ${result.status}${result.headers['set-cookie'] ? ' (cookies set)' : ''}`);
     } catch (err) {
-      console.error(`[web-to-figma] ✗ ${targetUrl} — ${err.message}`);
+      console.error(`[code-to-figma] ✗ ${targetUrl} — ${err.message}`);
       res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({ error: err.message }));
     }
@@ -242,7 +242,7 @@ function startServer(port) {
   server.listen(port, () => {
     console.log('');
     console.log(`  ╔══════════════════════════════════════════╗`);
-    console.log(`  ║        web-to-figma proxy active         ║`);
+    console.log(`  ║        code-to-figma proxy active        ║`);
     console.log(`  ║                                          ║`);
     console.log(`  ║  ${`http://localhost:${port}`.padEnd(38)}║`);
     console.log(`  ╚══════════════════════════════════════════╝`);

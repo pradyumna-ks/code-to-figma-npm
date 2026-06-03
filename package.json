@@ -6,7 +6,7 @@
   "module": "figma-capture.js",
   "sideEffects": true,
   "bin": {
-    "web-to-figma": "./proxy-server.js"
+    "code-to-figma": "./proxy-server.js"
   },
   "scripts": {
     "postinstall": "node postinstall.js"
