@@ -1,5 +1,28 @@
 #!/usr/bin/env node
 'use strict';
+
+// ═══ QUICK FLAGS CHECK ═══════════════════════════════════
+// Must be at the VERY TOP — before any require or processing.
+// npx may swallow arguments in some versions, so check raw process.argv.
+const _rawArgs = process.argv.slice(2).join(' ');
+if (_rawArgs.includes('--version') || _rawArgs.includes('-v')) {
+  // eslint-disable-next-line no-var, no-undef
+  var _pkg = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'package.json'), 'utf8'));
+  console.log(_pkg.version);
+  process.exit(0);
+}
+if (_rawArgs.includes('--help') || _rawArgs.includes('-h')) {
+  console.log('');
+  console.log('  code-to-figma proxy server');
+  console.log('');
+  console.log('    npx code-to-figma proxy           Start proxy (default port 3001)');
+  console.log('    npx code-to-figma proxy -p 8080    Custom port');
+  console.log('    npx code-to-figma --version       Show version');
+  console.log('    npx code-to-figma --help          Show this help');
+  console.log('');
+  process.exit(0);
+}
+// ════════════════════════════════════════════════════════
 /**
  * code-to-figma proxy
  *
