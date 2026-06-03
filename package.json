@@ -1,6 +1,6 @@
 {
   "name": "code-to-figma",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "Capture shim for the Code to Figma Figma plugin — lets the plugin read your running app's DOM and paste it as editable Figma layers.",
   "main": "figma-capture.js",
   "module": "figma-capture.js",
