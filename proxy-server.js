@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * web-to-figma proxy
+ * code-to-figma proxy
  *
  * A lightweight HTTP proxy that fetches any public website, strips response
  * headers that block iframe embedding (X-Frame-Options, CSP frame-ancestors),
@@ -13,6 +13,12 @@
  * The plugin auto-detects this proxy at http://localhost:3001. When it's
  * running, the iframe loads via src (not srcdoc), so the origin is localhost
  * and CSS, fonts, images all load natively from CDNs without CORS issues.
+ *
+ * Cookie forwarding:
+ *   The proxy reads cookies from the incoming request (your browser stores
+ *   cookies for localhost:3001) and forwards them to the target site via
+ *   the Cookie header. Set-Cookie responses from the target are passed back
+ *   to your browser. This enables session persistence across navigations.
  */
 
 const http = require('http');
