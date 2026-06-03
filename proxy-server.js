@@ -190,6 +190,24 @@ function rewriteImageUrlsToProxy(html, proxyBase, originalUrl) {
     (match, before, src, after) => before + proxyAssetUrl(src) + after
   );
 
+  // Rewrite <source> in <picture> elements (responsive images)
+  result = result.replace(
+    /(<source\s[^>]*?srcset\s*=\s*")([^"]+)(")/gi,
+    (match, before, srcset, after) => {
+      const newSrcset = srcset.replace(/(\S+)(\s+\d+[wx]\b)?/g, (m, urlPart, descriptor) => {
+        if (urlPart.startsWith('data:') || urlPart.startsWith('blob:')) return m;
+        return proxyAssetUrl(urlPart) + (descriptor || '');
+      });
+      return before + newSrcset + after;
+    }
+  );
+
+  // Rewrite <source> src for picture elements
+  result = result.replace(
+    /(<source\s[^>]*?src\s*=\s*")([^"]+)(")/gi,
+    (match, before, src, after) => before + proxyAssetUrl(src) + after
+  );
+
   // Rewrite srcset URLs (format: "url width, url width, ...")
   result = result.replace(
     /(<(?:img|source)\s[^>]*?srcset\s*=\s*")([^"]+)(")/gi,
@@ -236,26 +254,29 @@ function processHtml(html, originalUrl, proxyBase) {
   const frameBustPatch = `<script>
 (function(){
   // Block frame-busting by making window.top and window.parent point to self.
-  // Some sites also check window.location !== window.parent.location.
-  var noop = function(){};
-  try {
-    Object.defineProperty(window, 'top', { value: window, configurable: false, writable: false });
-    Object.defineProperty(window, 'parent', { value: window, configurable: false, writable: false });
-    Object.defineProperty(window, 'frameElement', { value: null, configurable: false, writable: false });
-  } catch(e) {}
-  // Block postMessage-based frame detection (e.g. Claude)
-  var _origPM = window.postMessage;
-  window.postMessage = function(msg, target, transfer) {
-    // Allow DEV_TO_DESIGN messages through, silently drop the rest
-    if (msg && msg.type && msg.type.indexOf('DEV_TO_DESIGN') === 0) {
-      return _origPM.call(window, msg, target, transfer);
-    }
-    // Silently eat frame-busting postMessage checks
-    return undefined;
+  var patch = function() {
+    try {
+      Object.defineProperty(window, 'top', { value: window, configurable: false, writable: false });
+      Object.defineProperty(window, 'parent', { value: window, configurable: false, writable: false });
+      Object.defineProperty(window, 'frameElement', { value: null, configurable: false, writable: false });
+    } catch(e) {}
+    // Block postMessage-based frame detection (e.g. Claude)
+    var _origPM = window.postMessage;
+    window.postMessage = function(msg, target, transfer) {
+      // Allow DEV_TO_DESIGN messages through, silently drop the rest
+      if (msg && msg.type && msg.type.indexOf('DEV_TO_DESIGN') === 0) {
+        return _origPM.call(window, msg, target, transfer);
+      }
+      return undefined;
+    };
+    window.name = '';
   };
-  // Prevent sites from detecting they're in a frame via window.open
-  // and window.name checks
-  window.name = '';
+  patch();
+  // Re-patch on DOMContentLoaded and after a delay to catch SPAs that check
+  // asynchronously.
+  document.addEventListener('DOMContentLoaded', patch);
+  setTimeout(patch, 500);
+  setTimeout(patch, 2000);
 })();
 <\/script>`;
 
