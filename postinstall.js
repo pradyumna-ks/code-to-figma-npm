@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * localhost-to-figma — postinstall
+ * code-to-figma — postinstall
  *
- * Runs automatically after `npm install localhost-to-figma`.
+ * Runs automatically after `npm install code-to-figma`.
  * Finds the project's entry file and inserts the capture shim import.
  *
  * Safe to run multiple times — skips if the import is already present.
@@ -19,11 +19,11 @@ const y = (s) => `\x1b[33m${s}\x1b[0m`;  // yellow
 const b = (s) => `\x1b[36m${s}\x1b[0m`;  // blue/cyan
 const d = (s) => `\x1b[2m${s}\x1b[0m`;   // dim
 
-const PREFIX = b('[localhost-to-figma]');
+const PREFIX = b('[code-to-figma]');
 
 // ── Guard: skip in CI / explicit opt-out ────────────────────
-if (process.env.CI || process.env.SKIP_LTF_INSTALL) {
-  console.log(`${PREFIX} ${d('CI detected — skipping auto-setup')}`);
+if (process.env.CI || process.env.SKIP_LTF_INSTALL || process.env.NODE_ENV === 'production') {
+  console.log(`${PREFIX} ${d('CI/Production detected — skipping auto-setup')}`);
   process.exit(0);
 }
 
@@ -55,8 +55,8 @@ const isAstro  = hasDep('astro');
 // webpack, Next.js, Remix). It gets statically replaced and the dead branch
 // is tree-shaken away in production builds — zero cost in prod.
 // `void` suppresses the floating-promise TS/eslint warning.
-const IMPORT = "if (process.env.NODE_ENV === 'development') void import('localhost-to-figma');";
-const MARKER = 'localhost-to-figma';   // presence check — works for require() too
+const IMPORT = "if (process.env.NODE_ENV === 'development' || (typeof window !== 'undefined' && window.location.hostname === 'localhost')) void import('code-to-figma');";
+const MARKER = 'code-to-figma';   // presence check — works for require() too
 
 // ── Entry file candidate lists ───────────────────────────────
 const GENERIC = [

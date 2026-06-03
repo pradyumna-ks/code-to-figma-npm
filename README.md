@@ -1,6 +1,6 @@
-# localhost-to-figma
+# code-to-figma
 
-Capture shim for the **[Localhost to Figma](https://github.com/pradyumna-ks/localhost-to-figma)** Figma plugin.
+Capture shim for the **[Code to Figma](https://github.com/pradyumna-ks/code-to-figma)** Figma plugin.
 
 Install this in your dev project so the plugin can read your running app's DOM and paste it into Figma as editable layers — frames, text, fills, auto layout — in one click.
 
@@ -9,14 +9,14 @@ Install this in your dev project so the plugin can read your running app's DOM a
 ## Install
 
 ```bash
-npm install localhost-to-figma --save-dev
+npm install code-to-figma --save-dev
 ```
 
 ## Add to your entry file
 
 ```ts
 // src/main.tsx  (or index.ts / main.ts / _app.tsx)
-import 'localhost-to-figma';
+import 'code-to-figma';
 ```
 
 That's it. The shim listens for a capture request from the plugin and sends back the DOM tree. It does nothing otherwise.
@@ -26,16 +26,16 @@ That's it. The shim listens for a capture request from the plugin and sends back
 ## Dev-only guard (recommended)
 
 ```ts
-if (import.meta.env.DEV) {
-  await import('localhost-to-figma');
+if (import.meta.env.DEV || (typeof window !== 'undefined' && window.location.hostname === 'localhost')) {
+  import('code-to-figma');
 }
 ```
 
 Webpack / CRA:
 
 ```ts
-if (process.env.NODE_ENV === 'development') {
-  await import('localhost-to-figma');
+if (process.env.NODE_ENV === 'development' || (typeof window !== 'undefined' && window.location.hostname === 'localhost')) {
+  import('code-to-figma');
 }
 ```
 
@@ -65,7 +65,7 @@ export default function RootLayout({ children }) {
 
 ## How it works
 
-When the Localhost to Figma plugin clicks **Paste**, it sends a `postMessage` to your app. This shim receives it, walks the visible DOM, and returns a structured layer tree. The plugin uses that tree to create Figma nodes.
+When the Code to Figma plugin clicks **Paste**, it sends a `postMessage` to your app. This shim receives it, walks the visible DOM, and returns a structured layer tree. The plugin uses that tree to create Figma nodes.
 
 The shim is tree-shakeable when used with a dev-only dynamic import and adds no overhead to production builds.
 
