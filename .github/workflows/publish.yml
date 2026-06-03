@@ -13,10 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Publish
-        run: npm publish --provenance --access public
-        working-directory: .
+      # Use the pre-installed Node.js on the runner (no setup-node).
+      # setup-node with registry-url creates .npmrc with auth token config
+      # that blocks the OIDC flow. Without it, npm uses its default config
+      # and OIDC auth kicks in via --provenance + id-token: write.
+      - run: npm publish --provenance --access public
