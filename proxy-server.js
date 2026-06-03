@@ -58,17 +58,16 @@ function parseArgs() {
   return { port };
 }
 
-// ── Fetch a URL with redirect following ──────────────────────
+// ── Fetch a URL with redirect following (returns buffer for binary) ──
 function fetchUrl(targetUrl, cookies) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(targetUrl);
     const mod = parsed.protocol === 'https:' ? https : http;
     const requestHeaders = {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept': '*/*',
       'Accept-Language': 'en-US,en;q=0.5',
     };
-    // Forward cookies from the iframe browser to the target site
     if (cookies) {
       requestHeaders['Cookie'] = cookies;
     }
@@ -79,7 +78,6 @@ function fetchUrl(targetUrl, cookies) {
       method: 'GET',
       headers: requestHeaders,
       timeout: TIMEOUT_MS,
-      // Follow up to 5 redirects
       maxRedirects: 5,
     };
 
@@ -91,7 +89,7 @@ function fetchUrl(targetUrl, cookies) {
         resolve({
           status: res.statusCode,
           headers: res.headers,
-          body: body.toString('utf8'),
+          body,   // Buffer (binary-safe, not string)
         });
       });
     });
@@ -102,8 +100,54 @@ function fetchUrl(targetUrl, cookies) {
   });
 }
 
+// ── Rewrite image URLs in HTML to go through proxy ──────────
+// Makes all <img src> and CSS url() resolve through localhost,
+// so canvas.drawImage() doesn't taint (same-origin).
+function rewriteImageUrlsToProxy(html, proxyBase, originalUrl) {
+  const proxyAssetUrl = (srcUrl) => {
+    try {
+      const abs = new URL(srcUrl, originalUrl).href;
+      return `${proxyBase}/proxy-asset?url=${encodeURIComponent(abs)}`;
+    } catch {
+      return srcUrl;
+    }
+  };
+
+  // Rewrite <img src> and <img srcset>
+  let result = html.replace(
+    /(<img\s[^>]*?src\s*=\s*")([^"]+)(")/gi,
+    (match, before, src, after) => before + proxyAssetUrl(src) + after
+  );
+  result = result.replace(
+    /(<img\s[^>]*?src\s*=\s*')([^']+)(')/gi,
+    (match, before, src, after) => before + proxyAssetUrl(src) + after
+  );
+
+  // Rewrite srcset URLs (format: "url width, url width, ...")
+  result = result.replace(
+    /(<(?:img|source)\s[^>]*?srcset\s*=\s*")([^"]+)(")/gi,
+    (match, before, srcset, after) => {
+      const newSrcset = srcset.replace(/(\S+)(\s+\d+[wx]\b)?/g, (m, urlPart, descriptor) => {
+        return proxyAssetUrl(urlPart) + (descriptor || '');
+      });
+      return before + newSrcset + after;
+    }
+  );
+
+  // Rewrite CSS url() in inline styles and style tags
+  result = result.replace(
+    /url\(['"]?([^'")\s]+)['"]?\)/gi,
+    (match, cssUrl) => {
+      if (cssUrl.startsWith('data:') || cssUrl.startsWith('blob:') || cssUrl.startsWith('#')) return match;
+      return `url('${proxyAssetUrl(cssUrl)}')`;
+    }
+  );
+
+  return result;
+}
+
 // ── Modify HTML for iframe embedding ─────────────────────────
-function processHtml(html, originalUrl) {
+function processHtml(html, originalUrl, proxyBase) {
   const escapedUrl = originalUrl.replace(/"/g, '&quot;');
 
   // Strip CSP that blocks frames
@@ -111,6 +155,9 @@ function processHtml(html, originalUrl) {
     /<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi,
     ''
   );
+
+  // Rewrite all image/asset URLs to go through proxy for same-origin canvas
+  cleaned = rewriteImageUrlsToProxy(cleaned, proxyBase, originalUrl);
 
   // Add <base> tag so relative URLs resolve against the original page
   const baseTag = `<base href="${escapedUrl}">`;
@@ -218,7 +265,36 @@ function startServer(port) {
       return;
     }
 
-    // Parse the target URL from query params
+    // ── Asset proxy endpoint ───────────────────────────────
+    // Rewritten <img src> and CSS url() go here.
+    // The proxy fetches the asset from the original URL and returns it
+    // with CORS headers. Since the page is served from the same origin
+    // (localhost:3001), canvas.drawImage() does NOT taint.
+    const parsedUrl = url.parse(req.url, true);
+    if (parsedUrl.pathname === '/proxy-asset') {
+      const assetUrl = parsedUrl.query.url;
+      if (!assetUrl) {
+        res.writeHead(400, { 'Access-Control-Allow-Origin': '*' });
+        res.end('Missing ?url');
+        return;
+      }
+      try {
+        const result = await fetchUrl(assetUrl);
+        const responseHeaders = {
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=31536000',
+          'Content-Type': result.headers['content-type'] || 'application/octet-stream',
+        };
+        res.writeHead(result.status, responseHeaders);
+        res.end(result.body);
+      } catch (err) {
+        res.writeHead(502, { 'Access-Control-Allow-Origin': '*' });
+        res.end(String(err));
+      }
+      return;
+    }
+
+    // ── Page proxy endpoint ────────────────────────────────
     const parsed = url.parse(req.url, true);
     const targetUrl = parsed.query.url;
 
@@ -259,8 +335,10 @@ function startServer(port) {
         return;
       }
 
-      // Inject shim and fix headers
-      const modified = processHtml(result.body, targetUrl);
+      // Inject shim, rewrite images, fix headers
+      const html = result.body.toString('utf8');
+      const proxyBase = `http://localhost:${server.address().port}`;
+      const modified = processHtml(html, targetUrl, proxyBase);
       const responseHeaders = stripBlockingHeaders(result.headers);
       responseHeaders['Content-Type'] = 'text/html; charset=utf-8';
 
