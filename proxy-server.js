@@ -109,6 +109,21 @@ try {
   process.exit(1);
 }
 
+// ── Download Figma's official capture.js at startup ─────────
+// We serve it locally so the iframe can load it without CDN/CORS issues.
+const FIGMA_CAPTURE_CDN = 'https://mcp.figma.com/mcp/html-to-design/capture.js';
+let FIGMA_CAPTURE_SOURCE = '';
+(async () => {
+  try {
+    const res = await fetchUrl(FIGMA_CAPTURE_CDN);
+    FIGMA_CAPTURE_SOURCE = res.body.toString('utf8');
+    console.log(`[code-to-figma] Figma capture.js loaded (${FIGMA_CAPTURE_SOURCE.length} bytes)`);
+  } catch (err) {
+    console.warn(`[code-to-figma] Could not download Figma capture.js: ${err.message}`);
+    console.warn('[code-to-figma] Copy-to-Figma button will try CDN directly (may fail in iframe)');
+  }
+})();
+
 // ── Arguments ───────────────────────────────────────────────
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -373,6 +388,30 @@ function startServer(port) {
     if (req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({ status: 'ok', service: 'code-to-figma-proxy' }));
+      return;
+    }
+
+    // ── Figma capture.js endpoint ──────────────────────────
+    // We serve capture.js locally so the iframe can load it without CDN/CORS
+    // issues. In srcdoc mode the CDN is often blocked by CSP or CORS.
+    if (req.url === '/figma-capture.js') {
+      res.writeHead(200, {
+        'Content-Type': 'application/javascript',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=3600',
+      });
+      if (FIGMA_CAPTURE_SOURCE) {
+        res.end(FIGMA_CAPTURE_SOURCE);
+      } else {
+        // Not downloaded yet — proxy from CDN
+        try {
+          const result = await fetchUrl(FIGMA_CAPTURE_CDN);
+          res.end(result.body);
+        } catch (err) {
+          res.writeHead(502);
+          res.end('// Error loading capture.js: ' + err.message);
+        }
+      }
       return;
     }
 
