@@ -115,17 +115,47 @@ function processHtml(html, originalUrl) {
   // Add <base> tag so relative URLs resolve against the original page
   const baseTag = `<base href="${escapedUrl}">`;
 
-  // Inject shim + base tag
+  // Frame-busting bypass — patches window.top/parent BEFORE any page JS runs.
+  // Many SPAs (Claude, Stripe, etc.) check `window.top !== window.self` and
+  // throw an error if loaded in an iframe. This script runs before the page's
+  // own scripts so the checks pass.
+  const frameBustPatch = `<script>
+(function(){
+  // Block frame-busting by making window.top and window.parent point to self.
+  // Some sites also check window.location !== window.parent.location.
+  var noop = function(){};
+  try {
+    Object.defineProperty(window, 'top', { value: window, configurable: false, writable: false });
+    Object.defineProperty(window, 'parent', { value: window, configurable: false, writable: false });
+    Object.defineProperty(window, 'frameElement', { value: null, configurable: false, writable: false });
+  } catch(e) {}
+  // Block postMessage-based frame detection (e.g. Claude)
+  var _origPM = window.postMessage;
+  window.postMessage = function(msg, target, transfer) {
+    // Allow DEV_TO_DESIGN messages through, silently drop the rest
+    if (msg && msg.type && msg.type.indexOf('DEV_TO_DESIGN') === 0) {
+      return _origPM.call(window, msg, target, transfer);
+    }
+    // Silently eat frame-busting postMessage checks
+    return undefined;
+  };
+  // Prevent sites from detecting they're in a frame via window.open
+  // and window.name checks
+  window.name = '';
+})();
+<\/script>`;
+
+  // Inject base tag + frame-bust patch + shim
   if (cleaned.includes('</head>')) {
-    // Base first in head, then rest, then shim at end of head
+    // Base first in head, then frame-bust patch, then shim at end of head
     cleaned = cleaned
       .replace('<head>', `<head>\n${baseTag}`)
-      .replace('</head>', `<script>${SHIM_SOURCE}</script>\n</head>`);
+      .replace('</head>', `${frameBustPatch}<script>${SHIM_SOURCE}</script>\n</head>`);
   } else if (cleaned.includes('<html')) {
     const idx = cleaned.indexOf('>') + 1;
-    cleaned = cleaned.slice(0, idx) + `<head>${baseTag}<script>${SHIM_SOURCE}</script></head>` + cleaned.slice(idx);
+    cleaned = cleaned.slice(0, idx) + `<head>${baseTag}${frameBustPatch}<script>${SHIM_SOURCE}</script></head>` + cleaned.slice(idx);
   } else {
-    cleaned = `<head>${baseTag}<script>${SHIM_SOURCE}</script></head>${cleaned}`;
+    cleaned = `<head>${baseTag}${frameBustPatch}<script>${SHIM_SOURCE}</script></head>${cleaned}`;
   }
 
   // Intercept link clicks to navigate inside the plugin
