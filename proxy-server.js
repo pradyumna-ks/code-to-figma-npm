@@ -452,10 +452,7 @@ function startServer(port) {
       // Inject shim, rewrite images, fix headers
       const html = result.body.toString('utf8');
       const proxyBase = `http://localhost:${server.address().port}`;
-      const htmlLen = html.length;
       const modified = processHtml(html, targetUrl, proxyBase);
-      console.log(`[code-to-figma] processHtml: ${htmlLen} → ${modified.length} bytes (+${modified.length - htmlLen})`);
-      console.log(`[code-to-figma] shim in output: ${modified.includes('DEV_TO_DESIGN/CAPTURE_DOM')}`);
       const responseHeaders = stripBlockingHeaders(result.headers, true);
       responseHeaders['Content-Type'] = 'text/html; charset=utf-8';
 
