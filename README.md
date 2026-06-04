@@ -1,17 +1,12 @@
 # code-to-figma
 
-Capture shim + proxy server for the **[Code to Figma](https://github.com/pradyumna-ks/code-to-figma)** Figma plugin.
+Capture shim for the **[Code to Figma](https://github.com/pradyumna-ks/code-to-figma)** Figma plugin.
 
-Two tools in one package:
-
-| Tool | What it does | How to use |
-|---|---|---|
-| **Capture shim** | Lets the plugin read your running app's DOM and paste it as Figma layers | `npm i code-to-figma -D` + `import 'code-to-figma'` |
-| **Proxy server** | Fetches any public website, strips iframe-blocking headers, injects the shim — perfect CSS/font/image rendering | `npx code-to-figma proxy` |
+It lets the plugin read your running app's DOM and paste it as editable Figma layers — `npm i code-to-figma -D` + `import 'code-to-figma'`.
 
 ---
 
-## 1. Capture shim (for your localhost app)
+## Capture shim (for your localhost app)
 
 Install in your dev project so the plugin can read your running dev server:
 
@@ -64,61 +59,7 @@ export default function RootLayout({ children }) {
 }
 ```
 
----
-
-## 2. Proxy server (for any public website)
-
-Capture any public website—not just your localhost—with full CSS, custom fonts, and images.
-
-```bash
-npx code-to-figma proxy
-```
-
-Then in the Figma plugin, enter any URL. The plugin auto-detects the proxy and loads the page via `src` (not `srcdoc`), so the origin is localhost and everything works natively.
-
-```
-  ╔══════════════════════════════════════════╗
-  ║        code-to-figma proxy active        ║
-  ║                                          ║
-  ║  http://localhost:3001                   ║
-  ╚══════════════════════════════════════════╝
-
-  Open the Code to Figma plugin in Figma and enter any URL.
-  Cookies from your browser are forwarded to the target site.
-  Press Ctrl+C to stop.
-```
-
-### How it works
-
-```
-Plugin iframe src ──▶ http://localhost:3001/?url=https://example.com
-                             │
-                             ▼
-                       Proxy fetches the page (server-side)
-                             │
-                             ├─ Strips X-Frame-Options / CSP frame-ancestors
-                             ├─ Adds <base> tag + capture shim
-                             ├─ Forwards cookies from your browser
-                             └─ Returns modified HTML with CORS headers
-```
-
-### Why use the proxy
-
-| Feature | Jina Reader (built-in fallback) | Local proxy |
-|---|---|---|
-| CSS | ✅ Absolute URL rewrite needed | ✅ **Native** — loads from CDNs |
-| Custom fonts | ❌ CORS blocked in srcdoc | ✅ **Native** — loads from CDNs |
-| Images (canvas) | ⚠️ URL fallback in Figma sandbox | ✅ **Native** — no taint |
-| SPAs (SSR sites) | ✅ Works (Next.js, Astro, etc.) | ✅ Works |
-| Logged-in sites | ❌ No cookies | ✅ **Cookie forwarding** |
-| User setup | Nothing | One terminal command |
-
-### Options
-
-```bash
-npx code-to-figma proxy --port 8080    # Custom port (default: 3001)
-npx code-to-figma proxy -p 8080        # Shorthand
-```
+> For capturing **public websites**, no install is needed — the plugin fetches them via the Jina Reader API and renders them through `srcdoc`. This shim is only for capturing your own localhost app at full fidelity.
 
 ---
 

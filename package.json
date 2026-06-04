@@ -5,15 +5,11 @@
   "main": "figma-capture.js",
   "module": "figma-capture.js",
   "sideEffects": true,
-  "bin": {
-    "code-to-figma": "./proxy-server.js"
-  },
   "scripts": {
     "postinstall": "node postinstall.js"
   },
   "files": [
     "figma-capture.js",
-    "proxy-server.js",
     "postinstall.js",
     "README.md",
     "LICENSE"
